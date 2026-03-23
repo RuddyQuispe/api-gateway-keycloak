@@ -1,0 +1,1627 @@
+openapi: 3.0.1
+info:
+  title: Servicio de Administración
+  description: >
+    API unificada de gestión de usuarios (con herencia por rol) y datos maestros del sistema
+    (sucursales, almacenes, categorías y mesas).
+  version: 1.0.0
+servers:
+  - url: /v1/admin_management
+    description: Administración de usuarios y datos maestros
+
+tags:
+  - name: User
+    description: Endpoint genérico de usuarios — crear, listar, actualizar y cambiar estado
+  - name: WaiterUser
+    description: Endpoint específico de mozos con filtros y datos propios del rol
+  - name: CookUser
+    description: Endpoint específico de cocineros con filtros y datos propios del rol
+  - name: CashierUser
+    description: Endpoint específico de cajeros con filtros y datos propios del rol
+  - name: WarehouseUser
+    description: Endpoint específico de encargados de almacén con filtros y datos propios del rol
+  - name: Sucursal
+    description: Gestión de sucursales del negocio
+  - name: Store
+    description: Gestión de almacenes asociados a sucursales
+  - name: Category
+    description: Gestión de categorías de productos e ingredientes
+  - name: Table
+    description: Gestión de mesas por sucursal
+
+paths:
+  # ════════════════════════════════════════════════════════════════════════════
+  # USER — GENÉRICO
+  # ════════════════════════════════════════════════════════════════════════════
+  /user:
+    get:
+      tags: [User]
+      summary: Listar todos los usuarios
+      operationId: listUsers
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserType"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserStatus"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: fullname
+          in: query
+          required: false
+          description: Filtrar por nombre completo (like)
+          schema:
+            type: string
+            maxLength: 255
+            example: "Juan"
+        - name: nickname
+          in: query
+          required: false
+          description: Filtrar por nickname (like)
+          schema:
+            type: string
+            maxLength: 255
+            example: "jperez"
+      responses:
+        "200":
+          description: Lista paginada de usuarios
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [User]
+      summary: Registrar un nuevo usuario
+      description: >
+        El campo `type` actúa como discriminador y determina el esquema aplicado:
+        WAITER → WaiterRequest, COOK → CookRequest,
+        CASHIER → CashierRequest, WAREHOUSE → WarehouseRequest.
+        Ningún campo de usuario es NOT NULL en BD salvo el PK generado automáticamente.
+      operationId: createUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRequest"
+            examples:
+              waiter:
+                summary: Crear mozo
+                value:
+                  type: "WAITER"
+                  nickname: "jperez"
+                  fullname: "Juan Pérez"
+                  sucursal_id: 1
+              cook:
+                summary: Crear cocinero
+                value:
+                  type: "COOK"
+                  nickname: "mgarcia"
+                  fullname: "María García"
+                  sucursal_id: 1
+                  cook_specialty: "pastas"
+              cashier:
+                summary: Crear cajero
+                value:
+                  type: "CASHIER"
+                  nickname: "rlopez"
+                  fullname: "Roberto López"
+                  sucursal_id: 2
+                  cashier_shift: "MORNING"
+              warehouse:
+                summary: Crear encargado de almacén
+                value:
+                  type: "WAREHOUSE"
+                  nickname: "csanchez"
+                  fullname: "Carlos Sánchez"
+                  sucursal_id: 1
+                  warehouse_area: "bebidas"
+      responses:
+        "201":
+          description: Usuario registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /user/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/user_id"
+    get:
+      tags: [User]
+      summary: Obtener un usuario por ID
+      operationId: getUser
+      responses:
+        "200":
+          description: Detalles del usuario
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [User]
+      summary: Actualizar un usuario
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserRequest"
+      responses:
+        "200":
+          description: Usuario actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [User]
+      summary: Eliminar un usuario
+      operationId: deleteUser
+      responses:
+        "204":
+          description: Usuario eliminado exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /user/{user_id}/status:
+    parameters:
+      - $ref: "#/components/parameters/user_id"
+    patch:
+      tags: [User]
+      summary: Cambiar estado activo/inactivo de un usuario
+      operationId: changeUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserStatusRequest"
+      responses:
+        "200":
+          description: Estado actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # WAITER USER — ESPECÍFICO
+  # ════════════════════════════════════════════════════════════════════════════
+  /waiter_user:
+    get:
+      tags: [WaiterUser]
+      summary: Listar mozos con filtros específicos del rol
+      operationId: listWaiters
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserStatus"
+        - name: fullname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "Juan"
+        - name: nickname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "jperez"
+      responses:
+        "200":
+          description: Lista paginada de mozos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaiterPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/WaiterResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/WaiterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /waiter_user/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/user_id"
+    get:
+      tags: [WaiterUser]
+      summary: Obtener detalle de un mozo
+      operationId: getWaiter
+      responses:
+        "200":
+          description: Detalles del mozo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WaiterResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # COOK USER — ESPECÍFICO
+  # ════════════════════════════════════════════════════════════════════════════
+  /cook_user:
+    get:
+      tags: [CookUser]
+      summary: Listar cocineros con filtros específicos del rol
+      operationId: listCooks
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserStatus"
+        - name: fullname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "María"
+        - name: nickname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "mgarcia"
+        - name: cook_specialty
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "pastas"
+      responses:
+        "200":
+          description: Lista paginada de cocineros
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CookPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/CookResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/CookResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /cook_user/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/user_id"
+    get:
+      tags: [CookUser]
+      summary: Obtener detalle de un cocinero
+      operationId: getCook
+      responses:
+        "200":
+          description: Detalles del cocinero
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CookResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # CASHIER USER — ESPECÍFICO
+  # ════════════════════════════════════════════════════════════════════════════
+  /cashier_user:
+    get:
+      tags: [CashierUser]
+      summary: Listar cajeros con filtros específicos del rol
+      operationId: listCashiers
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserStatus"
+        - name: fullname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "Roberto"
+        - name: nickname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "rlopez"
+        - name: cashier_shift
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CashierShift"
+      responses:
+        "200":
+          description: Lista paginada de cajeros
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashierPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/CashierResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/CashierResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /cashier_user/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/user_id"
+    get:
+      tags: [CashierUser]
+      summary: Obtener detalle de un cajero
+      operationId: getCashier
+      responses:
+        "200":
+          description: Detalles del cajero
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashierResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # WAREHOUSE USER — ESPECÍFICO
+  # ════════════════════════════════════════════════════════════════════════════
+  /warehouse_user:
+    get:
+      tags: [WarehouseUser]
+      summary: Listar encargados de almacén con filtros específicos del rol
+      operationId: listWarehouseUsers
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserStatus"
+        - name: fullname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "Carlos"
+        - name: nickname
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "csanchez"
+        - name: warehouse_area
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "bebidas"
+      responses:
+        "200":
+          description: Lista paginada de encargados de almacén
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarehousePageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/WarehouseResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/WarehouseResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /warehouse_user/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/user_id"
+    get:
+      tags: [WarehouseUser]
+      summary: Obtener detalle de un encargado de almacén
+      operationId: getWarehouseUser
+      responses:
+        "200":
+          description: Detalles del encargado de almacén
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WarehouseResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # SUCURSAL — description es NOT NULL en BD
+  # ════════════════════════════════════════════════════════════════════════════
+  /sucursal:
+    get:
+      tags: [Sucursal]
+      summary: Listar todas las sucursales
+      operationId: listSucursales
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: description
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "Centro"
+      responses:
+        "200":
+          description: Lista paginada de sucursales
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SucursalPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/SucursalResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/SucursalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [Sucursal]
+      summary: Crear una nueva sucursal
+      operationId: createSucursal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SucursalRequest"
+      responses:
+        "201":
+          description: Sucursal creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SucursalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /sucursal/{sucursal_id}:
+    parameters:
+      - $ref: "#/components/parameters/sucursal_id"
+    get:
+      tags: [Sucursal]
+      summary: Obtener una sucursal por ID
+      operationId: getSucursal
+      responses:
+        "200":
+          description: Detalles de la sucursal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SucursalResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [Sucursal]
+      summary: Actualizar una sucursal
+      operationId: updateSucursal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SucursalRequest"
+      responses:
+        "200":
+          description: Sucursal actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SucursalResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [Sucursal]
+      summary: Eliminar una sucursal
+      operationId: deleteSucursal
+      responses:
+        "204":
+          description: Sucursal eliminada exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # STORE — todos los campos son nullable en BD
+  # ════════════════════════════════════════════════════════════════════════════
+  /store:
+    get:
+      tags: [Store]
+      summary: Listar todos los almacenes
+      operationId: listStores
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: description
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "cocina"
+      responses:
+        "200":
+          description: Lista paginada de almacenes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorePageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/StoreResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/StoreResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [Store]
+      summary: Crear un nuevo almacén
+      operationId: createStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreRequest"
+      responses:
+        "201":
+          description: Almacén creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /store/{store_id}:
+    parameters:
+      - $ref: "#/components/parameters/store_id"
+    get:
+      tags: [Store]
+      summary: Obtener un almacén por ID
+      operationId: getStore
+      responses:
+        "200":
+          description: Detalles del almacén
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [Store]
+      summary: Actualizar un almacén
+      operationId: updateStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreRequest"
+      responses:
+        "200":
+          description: Almacén actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [Store]
+      summary: Eliminar un almacén
+      operationId: deleteStore
+      responses:
+        "204":
+          description: Almacén eliminado exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # CATEGORY — todos los campos son nullable en BD
+  # ════════════════════════════════════════════════════════════════════════════
+  /category:
+    get:
+      tags: [Category]
+      summary: Listar todas las categorías
+      operationId: listCategories
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CategoryType"
+        - name: description
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "bebidas"
+      responses:
+        "200":
+          description: Lista paginada de categorías
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [Category]
+      summary: Crear una nueva categoría
+      operationId: createCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryRequest"
+      responses:
+        "201":
+          description: Categoría creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /category/{category_id}:
+    parameters:
+      - $ref: "#/components/parameters/category_id"
+    get:
+      tags: [Category]
+      summary: Obtener una categoría por ID
+      operationId: getCategory
+      responses:
+        "200":
+          description: Detalles de la categoría
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [Category]
+      summary: Actualizar una categoría
+      operationId: updateCategory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryRequest"
+      responses:
+        "200":
+          description: Categoría actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [Category]
+      summary: Eliminar una categoría
+      operationId: deleteCategory
+      responses:
+        "204":
+          description: Categoría eliminada exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ════════════════════════════════════════════════════════════════════════════
+  # TABLE — todos los campos son nullable en BD
+  # ════════════════════════════════════════════════════════════════════════════
+  /table:
+    get:
+      tags: [Table]
+      summary: Listar todas las mesas
+      operationId: listTables
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: sucursal_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 1
+        - name: area
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "Terraza"
+      responses:
+        "200":
+          description: Lista paginada de mesas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TablePageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/TableResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/TableResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [Table]
+      summary: Crear una nueva mesa
+      operationId: createTable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TableRequest"
+      responses:
+        "201":
+          description: Mesa creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TableResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /table/{table_id}:
+    parameters:
+      - $ref: "#/components/parameters/table_id"
+    get:
+      tags: [Table]
+      summary: Obtener una mesa por ID
+      operationId: getTable
+      responses:
+        "200":
+          description: Detalles de la mesa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TableResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [Table]
+      summary: Actualizar una mesa
+      operationId: updateTable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TableRequest"
+      responses:
+        "200":
+          description: Mesa actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TableResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [Table]
+      summary: Eliminar una mesa
+      operationId: deleteTable
+      responses:
+        "204":
+          description: Mesa eliminada exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPONENTS
+# ══════════════════════════════════════════════════════════════════════════════
+components:
+  parameters:
+    page:
+      name: page
+      in: query
+      required: false
+      description: Número de página (base 0)
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      example: 0
+    size:
+      name: size
+      in: query
+      required: false
+      description: Cantidad de elementos por página
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      example: 20
+    sort:
+      name: sort
+      in: query
+      required: false
+      description: "Campo y dirección. Formato: campo,asc|desc"
+      schema:
+        type: string
+      example: "fullname,asc"
+    user_id:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 7
+    sucursal_id:
+      name: sucursal_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1
+    store_id:
+      name: store_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 2
+    category_id:
+      name: category_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 3
+    table_id:
+      name: table_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 5
+
+  responses:
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 404
+            message: "Recurso no encontrado"
+    BadRequest:
+      description: Datos de entrada inválidos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 400
+            message: "Datos de entrada inválidos"
+    UnprocessableEntity:
+      description: Operación no permitida en el estado actual del recurso
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 422
+            message: "Operación no permitida en el estado actual"
+    InternalServerError:
+      description: Error interno del servidor
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 500
+            message: "Error interno del servidor"
+
+  schemas:
+    # ── SHARED ────────────────────────────────────────────────────────────────
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "Validation failed"
+        errors:
+          type: array
+          nullable: true
+          description: >
+            Lista de errores de validación por campo.
+            Presente en respuestas 400; null en errores 404, 422 y 500.
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+          description: Nombre del campo que falló la validación
+          example: "description"
+        rejected_value:
+          nullable: true
+          description: Valor enviado que fue rechazado (puede ser null)
+          example: null
+        message:
+          type: string
+          description: >
+            Motivo del rechazo. Valores posibles según tipo de error:
+            "must not be null" | "size must be between 0 and {max}" |
+            "must be one of: {enum_values}" | "must be of type {type}"
+          example: "must not be null"
+
+    PageMetadata:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total_elements:
+          type: integer
+          example: 45
+        total_pages:
+          type: integer
+          example: 3
+        first:
+          type: boolean
+          example: true
+        last:
+          type: boolean
+          example: false
+
+    UserType:
+      type: string
+      enum: [WAITER, COOK, CASHIER, WAREHOUSE]
+      example: "WAITER"
+
+    UserStatus:
+      type: string
+      # BD: user.status VARCHAR(255) nullable — el enum es convención de negocio
+      enum: [ACTIVE, INACTIVE]
+      example: "ACTIVE"
+
+    CashierShift:
+      type: string
+      enum: [MORNING, AFTERNOON, NIGHT]
+      example: "MORNING"
+
+    CategoryType:
+      type: string
+      # BD: category.type VARCHAR(255) nullable
+      enum: [PRODUCT, INGREDIENT]
+      example: "PRODUCT"
+
+    # ── USER BASE ─────────────────────────────────────────────────────────────
+    # BD: user — nickname, fullname, status, sucursal_id son todos nullable
+    # Solo type es required aquí por ser el discriminador de oneOf
+    UserBaseRequest:
+      type: object
+      required:
+        - type
+      properties:
+        nickname:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "jperez"
+        fullname:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Juan Pérez"
+        sucursal_id:
+          type: integer
+          nullable: true
+          example: 1
+        type:
+          $ref: "#/components/schemas/UserType"
+
+    UserBaseResponse:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 7
+        nickname:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "jperez"
+        fullname:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Juan Pérez"
+        status:
+          # BD: status VARCHAR(255) nullable
+          $ref: "#/components/schemas/UserStatus"
+        sucursal_id:
+          type: integer
+          nullable: true
+          example: 1
+        type:
+          $ref: "#/components/schemas/UserType"
+        last_user:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "admin"
+        last_time:
+          # BD: last_time VARCHAR(255) nullable — en BD es VARCHAR, no TIMESTAMP
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "2024-03-15T08:00:00Z"
+
+    UserStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/UserStatus"
+
+    # ── WAITER ────────────────────────────────────────────────────────────────
+    # BD: waiter_user hereda user — solo agrega waiter_user_id (PK)
+    WaiterRequest:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseRequest"
+        - type: object
+          required:
+            - type
+          properties:
+            assigned_area:
+              type: string
+              maxLength: 255
+              nullable: true
+              example: "Terraza"
+
+    WaiterResponse:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseResponse"
+        - type: object
+          required:
+            - type
+          properties:
+            waiter_user_id:
+              type: integer
+              example: 10
+            assigned_area:
+              type: string
+              maxLength: 255
+              nullable: true
+              example: "Terraza"
+
+    WaiterPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/WaiterResponse"
+
+    # ── COOK ──────────────────────────────────────────────────────────────────
+    # BD: cook_user hereda user — solo agrega cook_user_id (PK)
+    CookRequest:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseRequest"
+        - type: object
+          properties:
+            cook_specialty:
+              type: string
+              maxLength: 255
+              nullable: true
+              example: "pastas"
+
+    CookResponse:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseResponse"
+        - type: object
+          properties:
+            cook_user_id:
+              type: integer
+              example: 20
+            cook_specialty:
+              type: string
+              maxLength: 255
+              nullable: true
+              example: "pastas"
+
+    CookPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/CookResponse"
+
+    # ── CASHIER ───────────────────────────────────────────────────────────────
+    # BD: cashier_user hereda user — solo agrega cashier_user_id (PK)
+    CashierRequest:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseRequest"
+        - type: object
+          properties:
+            cashier_shift:
+              # nullable: no existe en BD, es campo de negocio adicional
+              $ref: "#/components/schemas/CashierShift"
+
+    CashierResponse:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseResponse"
+        - type: object
+          properties:
+            cashier_user_id:
+              type: integer
+              example: 30
+            cashier_shift:
+              $ref: "#/components/schemas/CashierShift"
+
+    CashierPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/CashierResponse"
+
+    # ── WAREHOUSE ─────────────────────────────────────────────────────────────
+    # BD: warehouse_user — solo tiene warehouse_user_id (PK), no hereda user en el SQL
+    WarehouseRequest:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseRequest"
+        - type: object
+          properties:
+            warehouse_area:
+              type: string
+              maxLength: 255
+              nullable: true
+              example: "bebidas"
+
+    WarehouseResponse:
+      allOf:
+        - $ref: "#/components/schemas/UserBaseResponse"
+        - type: object
+          properties:
+            warehouse_user_id:
+              type: integer
+              example: 40
+            warehouse_area:
+              type: string
+              maxLength: 255
+              nullable: true
+              example: "bebidas"
+
+    WarehousePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/WarehouseResponse"
+
+    # ── USER discriminator ────────────────────────────────────────────────────
+    UserRequest:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/UserType"
+      oneOf:
+        - $ref: "#/components/schemas/WaiterRequest"
+        - $ref: "#/components/schemas/CookRequest"
+        - $ref: "#/components/schemas/CashierRequest"
+        - $ref: "#/components/schemas/WarehouseRequest"
+      discriminator:
+        propertyName: type
+        mapping:
+          WAITER: "#/components/schemas/WaiterRequest"
+          COOK: "#/components/schemas/CookRequest"
+          CASHIER: "#/components/schemas/CashierRequest"
+          WAREHOUSE: "#/components/schemas/WarehouseRequest"
+
+    UserResponse:
+      type: object
+      properties:
+        type:
+          $ref: "#/components/schemas/UserType"
+      oneOf:
+        - $ref: "#/components/schemas/WaiterResponse"
+        - $ref: "#/components/schemas/CookResponse"
+        - $ref: "#/components/schemas/CashierResponse"
+        - $ref: "#/components/schemas/WarehouseResponse"
+      discriminator:
+        propertyName: type
+        mapping:
+          WAITER: "#/components/schemas/WaiterResponse"
+          COOK: "#/components/schemas/CookResponse"
+          CASHIER: "#/components/schemas/CashierResponse"
+          WAREHOUSE: "#/components/schemas/WarehouseResponse"
+
+    UserPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserResponse"
+
+    # ── SUCURSAL ──────────────────────────────────────────────────────────────
+    # BD: description VARCHAR(255) NOT NULL  ← único campo NOT NULL del módulo
+    SucursalRequest:
+      type: object
+      required:
+        - description
+      properties:
+        description:
+          type: string
+          maxLength: 255
+          example: "Sucursal Centro"
+
+    SucursalResponse:
+      type: object
+      properties:
+        sucursal_id:
+          type: integer
+          example: 1
+        description:
+          type: string
+          maxLength: 255
+          example: "Sucursal Centro"
+
+    SucursalPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/SucursalResponse"
+
+    # ── STORE ─────────────────────────────────────────────────────────────────
+    # BD: description VARCHAR(255) nullable, location VARCHAR(255) nullable, sucursal_id nullable
+    StoreRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Almacén cocina principal"
+        location:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Planta baja, sector norte"
+        sucursal_id:
+          type: integer
+          nullable: true
+          example: 1
+
+    StoreResponse:
+      type: object
+      properties:
+        store_id:
+          type: integer
+          example: 2
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Almacén cocina principal"
+        location:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Planta baja, sector norte"
+        sucursal_id:
+          type: integer
+          nullable: true
+          example: 1
+
+    StorePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/StoreResponse"
+
+    # ── CATEGORY ──────────────────────────────────────────────────────────────
+    # BD: description VARCHAR(255) nullable, type VARCHAR(255) nullable
+    CategoryRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Bebidas calientes"
+        type:
+          # nullable en BD, pero usamos enum por convención de negocio
+          $ref: "#/components/schemas/CategoryType"
+
+    CategoryResponse:
+      type: object
+      properties:
+        category_id:
+          type: integer
+          example: 3
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Bebidas calientes"
+        type:
+          $ref: "#/components/schemas/CategoryType"
+
+    CategoryPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/CategoryResponse"
+
+    # ── TABLE ─────────────────────────────────────────────────────────────────
+    # BD: area VARCHAR(255) nullable, sucursal_id nullable
+    TableRequest:
+      type: object
+      properties:
+        area:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Terraza"
+        sucursal_id:
+          type: integer
+          nullable: true
+          example: 1
+
+    TableResponse:
+      type: object
+      properties:
+        table_id:
+          type: integer
+          example: 5
+        area:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Terraza"
+        sucursal_id:
+          type: integer
+          nullable: true
+          example: 1
+
+    TablePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/TableResponse"

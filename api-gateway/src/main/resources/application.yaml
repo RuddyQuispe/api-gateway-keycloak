@@ -1,0 +1,40 @@
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: keycloak-auth
+              uri: http://localhost:8080
+              predicates:
+                - Path=/realms/**
+            - id: admin_management
+              uri: http://localhost:8081
+              predicates:
+                - Path=/v1/admin_management/**
+                - Method=GET, POST, PUT, DELETE
+              filters:
+                - TokenRelay
+            - id: inventory_management
+              uri: http://localhost:8082
+              predicates:
+                - Path=/v1/inventory_management/**
+                - Method=GET, POST, PUT, DELETE
+              filters:
+                - AddRequestHeader=X-Demo-Value, true
+                - AddRequestHeader=X-Request-ID, ${random.uuid}
+                - TokenRelay
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/test-realm
+logging:
+  level:
+    org.springframework.cloud: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway.route.RouteDefinitionLocator: DEBUG
+server:
+  port: 8090

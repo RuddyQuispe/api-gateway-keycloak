@@ -1,0 +1,1413 @@
+openapi: 3.0.1
+info:
+  title: Servicio de Inventario
+  description: API de gestión de ingredientes, stock por almacén, y notas de ingreso/egreso
+  version: 1.0.0
+servers:
+  - url: /v1/inventory_management
+
+tags:
+  - name: Ingredient
+  - name: StoreIngredient
+  - name: IngressNote
+  - name: DischargeNote
+
+paths:
+  # ── INGREDIENT ─────────────────────────────────────────────────────────────
+  # BD: description VARCHAR(255), stock INTEGER, enabled BOOLEAN, unit VARCHAR(255),
+  #     last_user VARCHAR(255), last_time TIMESTAMP, category_id INTEGER, store_id INTEGER
+  #     → todos nullable
+  /ingredient:
+    get:
+      tags: [Ingredient]
+      summary: Listar todos los ingredientes
+      operationId: listIngredients
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: category_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 2
+        - name: enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+            example: true
+        - name: description
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "harina"
+        - name: unit
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "kg"
+      responses:
+        "200":
+          description: Lista paginada de ingredientes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/IngredientResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/IngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [Ingredient]
+      summary: Registrar un nuevo ingrediente
+      operationId: createIngredient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngredientRequest"
+      responses:
+        "201":
+          description: Ingrediente registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /ingredient/{ingredient_id}:
+    parameters:
+      - $ref: "#/components/parameters/ingredient_id"
+    get:
+      tags: [Ingredient]
+      summary: Obtener un ingrediente por ID
+      operationId: getIngredient
+      responses:
+        "200":
+          description: Detalles del ingrediente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [Ingredient]
+      summary: Actualizar un ingrediente
+      operationId: updateIngredient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngredientRequest"
+      responses:
+        "200":
+          description: Ingrediente actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [Ingredient]
+      summary: Eliminar un ingrediente
+      operationId: deleteIngredient
+      responses:
+        "204":
+          description: Ingrediente eliminado exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── STORE INGREDIENT ───────────────────────────────────────────────────────
+  # BD: store_id INTEGER, ingredient_id INTEGER, is_enabled BOOLEAN, stock DECIMAL
+  #     → todos nullable
+  /store_ingredient:
+    get:
+      tags: [StoreIngredient]
+      summary: Listar stock de ingredientes por almacén
+      operationId: listStoreIngredients
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: store_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 2
+        - name: ingredient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 5
+        - name: is_enabled
+          in: query
+          required: false
+          schema:
+            type: boolean
+            example: true
+        - name: stock_min
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+            example: 10.0
+        - name: stock_max
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+            example: 500.0
+      responses:
+        "200":
+          description: Lista paginada de stock por almacén
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientPageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [StoreIngredient]
+      summary: Asociar un ingrediente a un almacén
+      operationId: createStoreIngredient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreIngredientRequest"
+      responses:
+        "201":
+          description: Registro de stock creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /store_ingredient/{store_ingredient_id}:
+    parameters:
+      - $ref: "#/components/parameters/store_ingredient_id"
+    get:
+      tags: [StoreIngredient]
+      summary: Obtener stock de un ingrediente en un almacén
+      operationId: getStoreIngredient
+      responses:
+        "200":
+          description: Detalles del stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [StoreIngredient]
+      summary: Actualizar stock de un ingrediente en almacén
+      operationId: updateStoreIngredient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreIngredientRequest"
+      responses:
+        "200":
+          description: Stock actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [StoreIngredient]
+      summary: Desasociar un ingrediente de un almacén
+      operationId: deleteStoreIngredient
+      responses:
+        "204":
+          description: Registro eliminado exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /store_ingredient/{store_ingredient_id}/status:
+    parameters:
+      - $ref: "#/components/parameters/store_ingredient_id"
+    patch:
+      tags: [StoreIngredient]
+      summary: Habilitar o deshabilitar un ingrediente en el almacén
+      operationId: changeStoreIngredientStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreIngredientStatusRequest"
+      responses:
+        "200":
+          description: Estado actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── INGRESS NOTE ───────────────────────────────────────────────────────────
+  # BD: date_register TIMESTAMP, user_provider VARCHAR(255), user_owner_id INTEGER,
+  #     status VARCHAR(255), last_user VARCHAR(255), last_time TIMESTAMP
+  #     → todos nullable
+  /ingress_note:
+    get:
+      tags: [IngressNote]
+      summary: Listar todas las notas de ingreso
+      operationId: listIngressNotes
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/NoteStatus"
+        - name: user_owner_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 7
+        - name: user_provider
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+            example: "Proveedor ABC"
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-03-01"
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-03-31"
+      responses:
+        "200":
+          description: Lista paginada de notas de ingreso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNotePageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/IngressNoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [IngressNote]
+      summary: Crear una nota de ingreso
+      operationId: createIngressNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngressNoteRequest"
+      responses:
+        "201":
+          description: Nota de ingreso creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /ingress_note/{ingress_note_id}:
+    parameters:
+      - $ref: "#/components/parameters/ingress_note_id"
+    get:
+      tags: [IngressNote]
+      summary: Obtener una nota de ingreso por ID
+      operationId: getIngressNote
+      responses:
+        "200":
+          description: Detalles de la nota de ingreso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [IngressNote]
+      summary: Eliminar una nota de ingreso (solo en estado DRAFT)
+      operationId: deleteIngressNote
+      responses:
+        "204":
+          description: Nota eliminada exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /ingress_note/{ingress_note_id}/status:
+    parameters:
+      - $ref: "#/components/parameters/ingress_note_id"
+    patch:
+      tags: [IngressNote]
+      summary: Confirmar o cancelar una nota de ingreso
+      operationId: changeIngressNoteStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteStatusRequest"
+      responses:
+        "200":
+          description: Estado actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── INGRESS NOTE DETAIL ────────────────────────────────────────────────────
+  # BD: ingress_note_id INTEGER, store_ingredient_id INTEGER, stock DECIMAL,
+  #     unit VARCHAR(255), last_user VARCHAR(255), last_time TIMESTAMP
+  #     → todos nullable
+  /ingress_note/{ingress_note_id}/ingress_note_detail:
+    parameters:
+      - $ref: "#/components/parameters/ingress_note_id"
+    get:
+      tags: [IngressNote]
+      summary: Listar detalles de una nota de ingreso
+      operationId: listIngressNoteDetails
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: store_ingredient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 10
+      responses:
+        "200":
+          description: Lista paginada de detalles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteDetailPageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [IngressNote]
+      summary: Agregar un detalle a una nota de ingreso
+      operationId: addIngressNoteDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngressNoteDetailRequest"
+      responses:
+        "201":
+          description: Detalle agregado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteDetailResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /ingress_note/{ingress_note_id}/ingress_note_detail/{ingress_note_detail_id}:
+    parameters:
+      - $ref: "#/components/parameters/ingress_note_id"
+      - $ref: "#/components/parameters/ingress_note_detail_id"
+    get:
+      tags: [IngressNote]
+      summary: Obtener un detalle de nota de ingreso
+      operationId: getIngressNoteDetail
+      responses:
+        "200":
+          description: Detalle encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [IngressNote]
+      summary: Actualizar un detalle de nota de ingreso
+      operationId: updateIngressNoteDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngressNoteDetailRequest"
+      responses:
+        "200":
+          description: Detalle actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngressNoteDetailResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [IngressNote]
+      summary: Eliminar un detalle de nota de ingreso
+      operationId: deleteIngressNoteDetail
+      responses:
+        "204":
+          description: Detalle eliminado exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── DISCHARGE NOTE ─────────────────────────────────────────────────────────
+  # BD: date_register TIMESTAMP, user_owner_id INTEGER, status VARCHAR(255),
+  #     last_user VARCHAR(255), last_time TIMESTAMP → todos nullable
+  /discharge_note:
+    get:
+      tags: [DischargeNote]
+      summary: Listar todas las notas de egreso
+      operationId: listDischargeNotes
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/NoteStatus"
+        - name: user_owner_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 7
+        - name: date_from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-03-01"
+        - name: date_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+            example: "2024-03-31"
+      responses:
+        "200":
+          description: Lista paginada de notas de egreso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNotePageResponse"
+            application/stream+json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteResponse"
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    post:
+      tags: [DischargeNote]
+      summary: Crear una nota de egreso
+      operationId: createDischargeNote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DischargeNoteRequest"
+      responses:
+        "201":
+          description: Nota de egreso creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /discharge_note/{discharge_note_id}:
+    parameters:
+      - $ref: "#/components/parameters/discharge_note_id"
+    get:
+      tags: [DischargeNote]
+      summary: Obtener una nota de egreso por ID
+      operationId: getDischargeNote
+      responses:
+        "200":
+          description: Detalles de la nota de egreso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [DischargeNote]
+      summary: Eliminar una nota de egreso (solo en estado DRAFT)
+      operationId: deleteDischargeNote
+      responses:
+        "204":
+          description: Nota eliminada exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /discharge_note/{discharge_note_id}/status:
+    parameters:
+      - $ref: "#/components/parameters/discharge_note_id"
+    patch:
+      tags: [DischargeNote]
+      summary: Confirmar o cancelar una nota de egreso
+      operationId: changeDischargeNoteStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NoteStatusRequest"
+      responses:
+        "200":
+          description: Estado actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  # ── DISCHARGE NOTE DETAIL ──────────────────────────────────────────────────
+  # BD: discharge_note_id INTEGER, store_ingredient_id INTEGER, stock DECIMAL,
+  #     unit VARCHAR(255), last_user VARCHAR(255), last_time TIMESTAMP
+  #     → todos nullable
+  /discharge_note/{discharge_note_id}/discharge_note_detail:
+    parameters:
+      - $ref: "#/components/parameters/discharge_note_id"
+    get:
+      tags: [DischargeNote]
+      summary: Listar detalles de una nota de egreso
+      operationId: listDischargeNoteDetails
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/size"
+        - $ref: "#/components/parameters/sort"
+        - name: store_ingredient_id
+          in: query
+          required: false
+          schema:
+            type: integer
+            example: 10
+      responses:
+        "200":
+          description: Lista paginada de detalles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteDetailPageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      tags: [DischargeNote]
+      summary: Agregar un detalle a una nota de egreso
+      operationId: addDischargeNoteDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DischargeNoteDetailRequest"
+      responses:
+        "201":
+          description: Detalle agregado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteDetailResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /discharge_note/{discharge_note_id}/discharge_note_detail/{discharge_note_detail_id}:
+    parameters:
+      - $ref: "#/components/parameters/discharge_note_id"
+      - $ref: "#/components/parameters/discharge_note_detail_id"
+    get:
+      tags: [DischargeNote]
+      summary: Obtener un detalle de nota de egreso
+      operationId: getDischargeNoteDetail
+      responses:
+        "200":
+          description: Detalle encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      tags: [DischargeNote]
+      summary: Actualizar un detalle de nota de egreso
+      operationId: updateDischargeNoteDetail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DischargeNoteDetailRequest"
+      responses:
+        "200":
+          description: Detalle actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DischargeNoteDetailResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [DischargeNote]
+      summary: Eliminar un detalle de nota de egreso
+      operationId: deleteDischargeNoteDetail
+      responses:
+        "204":
+          description: Detalle eliminado exitosamente
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  parameters:
+    page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+      example: 0
+    size:
+      name: size
+      in: query
+      required: false
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+      example: 20
+    sort:
+      name: sort
+      in: query
+      required: false
+      schema:
+        type: string
+      example: "date_register,desc"
+    ingredient_id:
+      name: ingredient_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 5
+    store_ingredient_id:
+      name: store_ingredient_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 10
+    ingress_note_id:
+      name: ingress_note_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 100
+    ingress_note_detail_id:
+      name: ingress_note_detail_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 1001
+    discharge_note_id:
+      name: discharge_note_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 200
+    discharge_note_detail_id:
+      name: discharge_note_detail_id
+      in: path
+      required: true
+      schema:
+        type: integer
+      example: 2001
+
+  responses:
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 404
+            message: "Recurso no encontrado"
+    BadRequest:
+      description: Datos de entrada inválidos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 400
+            message: "Datos de entrada inválidos"
+    UnprocessableEntity:
+      description: Operación no permitida en el estado actual
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 422
+            message: "Solo se pueden modificar notas en estado DRAFT"
+    InternalServerError:
+      description: Error interno del servidor
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 500
+            message: "Error interno del servidor"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "Validation failed"
+        errors:
+          type: array
+          nullable: true
+          description: >
+            Lista de errores de validación por campo.
+            Presente en respuestas 400; null en errores 404, 422 y 500.
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      properties:
+        field:
+          type: string
+          description: Nombre del campo que falló la validación
+          example: "description"
+        rejected_value:
+          nullable: true
+          description: Valor enviado que fue rechazado (puede ser null)
+          example: null
+        message:
+          type: string
+          description: >
+            Motivo del rechazo. Valores posibles según tipo de error:
+            "must not be null" | "size must be between 0 and {max}" |
+            "must be one of: {enum_values}" | "must be of type {type}"
+          example: "must not be null"
+
+    PageMetadata:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 0
+        size:
+          type: integer
+          example: 20
+        total_elements:
+          type: integer
+          example: 45
+        total_pages:
+          type: integer
+          example: 3
+        first:
+          type: boolean
+          example: true
+        last:
+          type: boolean
+          example: false
+
+    NoteStatus:
+      type: string
+      enum: [DRAFT, CONFIRMED, CANCELLED]
+      example: "DRAFT"
+
+    NoteStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/NoteStatus"
+
+    # ── INGREDIENT ────────────────────────────────────────────────────────────
+    # BD: todos los campos nullable → sin required
+    IngredientRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Harina de trigo"
+        stock:
+          type: integer
+          nullable: true
+          example: 0
+        enabled:
+          type: boolean
+          nullable: true
+          example: true
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+        category_id:
+          type: integer
+          nullable: true
+          example: 2
+
+    IngredientResponse:
+      type: object
+      properties:
+        ingredient_id:
+          type: integer
+          example: 5
+        description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Harina de trigo"
+        stock:
+          type: integer
+          nullable: true
+          example: 200
+        enabled:
+          type: boolean
+          nullable: true
+          example: true
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+        category_id:
+          type: integer
+          nullable: true
+          example: 2
+        last_user:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "admin"
+        last_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T09:00:00Z"
+
+    IngredientPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/IngredientResponse"
+
+    # ── STORE INGREDIENT ──────────────────────────────────────────────────────
+    # BD: store_id INTEGER nullable, ingredient_id INTEGER nullable,
+    #     is_enabled BOOLEAN nullable, stock DECIMAL nullable
+    StoreIngredientRequest:
+      type: object
+      properties:
+        store_id:
+          type: integer
+          nullable: true
+          example: 2
+        ingredient_id:
+          type: integer
+          nullable: true
+          example: 5
+        is_enabled:
+          type: boolean
+          nullable: true
+          example: true
+        stock:
+          type: number
+          format: double
+          nullable: true
+          example: 100.0
+
+    StoreIngredientStatusRequest:
+      type: object
+      required: [is_enabled]
+      properties:
+        is_enabled:
+          type: boolean
+          example: false
+
+    StoreIngredientResponse:
+      type: object
+      properties:
+        store_ingredient_id:
+          type: integer
+          example: 10
+        store_id:
+          type: integer
+          nullable: true
+          example: 2
+        ingredient_id:
+          type: integer
+          nullable: true
+          example: 5
+        ingredient_description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Harina de trigo"
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+        is_enabled:
+          type: boolean
+          nullable: true
+          example: true
+        stock:
+          type: number
+          format: double
+          nullable: true
+          example: 80.5
+
+    StoreIngredientPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/StoreIngredientResponse"
+
+    # ── INGRESS NOTE ──────────────────────────────────────────────────────────
+    # BD: user_provider VARCHAR(255) nullable, user_owner_id INTEGER nullable,
+    #     status VARCHAR(255) nullable
+    IngressNoteRequest:
+      type: object
+      properties:
+        user_provider:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Proveedor ABC S.R.L."
+        user_owner_id:
+          type: integer
+          nullable: true
+          example: 7
+
+    IngressNoteResponse:
+      type: object
+      properties:
+        ingress_note_id:
+          type: integer
+          example: 100
+        date_register:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T10:30:00Z"
+        user_provider:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Proveedor ABC S.R.L."
+        user_owner_id:
+          type: integer
+          nullable: true
+          example: 7
+        status:
+          $ref: "#/components/schemas/NoteStatus"
+        last_user:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "admin"
+        last_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T10:30:00Z"
+
+    IngressNotePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/IngressNoteResponse"
+
+    # ── INGRESS NOTE DETAIL ───────────────────────────────────────────────────
+    # BD: ingress_note_id INTEGER nullable, store_ingredient_id INTEGER nullable,
+    #     stock DECIMAL nullable, unit VARCHAR(255) nullable
+    IngressNoteDetailRequest:
+      type: object
+      properties:
+        store_ingredient_id:
+          type: integer
+          nullable: true
+          example: 10
+        stock:
+          type: number
+          format: double
+          nullable: true
+          example: 50.0
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+
+    IngressNoteDetailResponse:
+      type: object
+      properties:
+        ingress_note_detail_id:
+          type: integer
+          example: 1001
+        ingress_note_id:
+          type: integer
+          nullable: true
+          example: 100
+        store_ingredient_id:
+          type: integer
+          nullable: true
+          example: 10
+        ingredient_description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Harina de trigo"
+        stock:
+          type: number
+          format: double
+          nullable: true
+          example: 50.0
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+        last_user:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "admin"
+        last_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T10:30:00Z"
+
+    IngressNoteDetailPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/IngressNoteDetailResponse"
+
+    # ── DISCHARGE NOTE ────────────────────────────────────────────────────────
+    # BD: user_owner_id INTEGER nullable, status VARCHAR(255) nullable
+    DischargeNoteRequest:
+      type: object
+      properties:
+        user_owner_id:
+          type: integer
+          nullable: true
+          example: 7
+
+    DischargeNoteResponse:
+      type: object
+      properties:
+        discharge_note_id:
+          type: integer
+          example: 200
+        date_register:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T11:00:00Z"
+        user_owner_id:
+          type: integer
+          nullable: true
+          example: 7
+        status:
+          $ref: "#/components/schemas/NoteStatus"
+        last_user:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "admin"
+        last_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T11:00:00Z"
+
+    DischargeNotePageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/DischargeNoteResponse"
+
+    # ── DISCHARGE NOTE DETAIL ─────────────────────────────────────────────────
+    # BD: discharge_note_id INTEGER nullable, store_ingredient_id INTEGER nullable,
+    #     stock DECIMAL nullable, unit VARCHAR(255) nullable
+    DischargeNoteDetailRequest:
+      type: object
+      properties:
+        store_ingredient_id:
+          type: integer
+          nullable: true
+          example: 10
+        stock:
+          type: number
+          format: double
+          nullable: true
+          example: 20.0
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+
+    DischargeNoteDetailResponse:
+      type: object
+      properties:
+        discharge_note_detail_id:
+          type: integer
+          example: 2001
+        discharge_note_id:
+          type: integer
+          nullable: true
+          example: 200
+        store_ingredient_id:
+          type: integer
+          nullable: true
+          example: 10
+        ingredient_description:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "Harina de trigo"
+        stock:
+          type: number
+          format: double
+          nullable: true
+          example: 20.0
+        unit:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "kg"
+        last_user:
+          type: string
+          maxLength: 255
+          nullable: true
+          example: "admin"
+        last_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-03-15T11:00:00Z"
+
+    DischargeNoteDetailPageResponse:
+      allOf:
+        - $ref: "#/components/schemas/PageMetadata"
+        - type: object
+          properties:
+            content:
+              type: array
+              items:
+                $ref: "#/components/schemas/DischargeNoteDetailResponse"

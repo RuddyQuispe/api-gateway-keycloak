@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: inventory-management
+  main:
+    allow-bean-definition-overriding: true
+
+springdoc:
+  swagger-ui:
+    path: /
+server:
+  port: 8082
