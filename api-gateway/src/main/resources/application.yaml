@@ -6,10 +6,6 @@ spring:
       server:
         webflux:
           routes:
-            - id: keycloak-auth
-              uri: http://keycloak:8080
-              predicates:
-                - Path=/realms/**
             - id: admin_management
               uri: http://admin-management:8080
               predicates:
@@ -28,12 +24,12 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: http://localhost:8080/realms/${KEYCLOAK_UMA_REALM:api-gateway-realm}
-          jwk-set-uri: http://keycloak:8080/realms/${KEYCLOAK_UMA_REALM:api-gateway-realm}/protocol/openid-connect/certs
+          issuer-uri: ${KEYCLOAK_ISSUER_URL:http://localhost:8080}/realms/${KEYCLOAK_UMA_REALM:api-gateway-realm}
+          jwk-set-uri: ${KEYCLOAK_UMA_SERVER_URL:http://keycloak:8080}/realms/${KEYCLOAK_UMA_REALM:api-gateway-realm}/protocol/openid-connect/certs
 
 keycloak:
   uma:
-    server-url: http://keycloak:8080
+    server-url: ${KEYCLOAK_UMA_SERVER_URL:http://keycloak:8080}
     realm: ${KEYCLOAK_UMA_REALM:api-gateway-realm}
     audience: ${KEYCLOAK_UMA_AUDIENCE:api-gateway-client}
     cache-ttl-seconds: 30

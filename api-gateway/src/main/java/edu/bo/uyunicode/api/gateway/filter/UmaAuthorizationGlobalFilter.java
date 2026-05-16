@@ -14,20 +14,16 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.util.Base64;
-import java.util.List;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class UmaAuthorizationGlobalFilter implements GlobalFilter, Ordered {
 
-    private static final List<String> PUBLIC_PATHS = List.of("/realms/");
-
     private final KeycloakUmaClient umaClient;
 
     @Override
     public int getOrder() {
-        // Run after Spring Security (-1) but before routing (Integer.MIN_VALUE)
         return -1;
     }
 
@@ -35,25 +31,19 @@ public class UmaAuthorizationGlobalFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         log.info("Received request for path: {}", path);
-        if (PUBLIC_PATHS.stream().anyMatch(path::startsWith)) {
-            return chain.filter(exchange);
-        }
 
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
-        log.info("Authorization header: {}", authHeader);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return respond(exchange, HttpStatus.UNAUTHORIZED);
         }
 
         String token = authHeader.substring(7);
         String jti = extractJti(token);
-        log.info("Extracted JTI: {}, token: {}", jti, token);
         if (jti == null) {
             return respond(exchange, HttpStatus.UNAUTHORIZED);
         }
 
         String entity = extractEntity(path);
-        log.info("Extracted entity: {}", entity);
         if (entity == null) {
             return respond(exchange, HttpStatus.FORBIDDEN);
         }
@@ -62,26 +52,24 @@ public class UmaAuthorizationGlobalFilter implements GlobalFilter, Ordered {
         log.info("Resolved permission: {}", permission);
 
         return umaClient.isAuthorized(token, jti, permission)
-                .flatMap(authorized -> authorized
-                        ? chain.filter(exchange)
-                        : respond(exchange, HttpStatus.FORBIDDEN));
+                .flatMap(status -> {
+                    if (status.is2xxSuccessful()) return chain.filter(exchange);
+                    return respond(exchange, status);
+                });
     }
 
-    // Extracts entity from /v1/{service}/{entity}/... → segment at index 3
     private String extractEntity(String path) {
         String[] segments = path.split("/");
         return segments.length >= 4 ? segments[3] : null;
     }
 
     private String resolveScope(HttpMethod method) {
-        log.info("Resolving scope for method: {}", method);
         if (HttpMethod.POST.equals(method)) return "create";
         if (HttpMethod.PUT.equals(method) || HttpMethod.PATCH.equals(method) || HttpMethod.DELETE.equals(method))
-            return "update"; // DELETE is logical delete (status change)
+            return "update";
         return "read";
     }
 
-    // JWT already validated by Spring Security — safe to parse without re-verifying signature
     private String extractJti(String token) {
         try {
             String[] parts = token.split("\\.");

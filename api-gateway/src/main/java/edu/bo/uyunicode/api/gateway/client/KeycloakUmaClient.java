@@ -6,6 +6,7 @@ import edu.bo.uyunicode.api.gateway.config.KeycloakUmaProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -27,7 +28,7 @@ public class KeycloakUmaClient {
     private final WebClient.Builder webClientBuilder;
 
     private WebClient webClient;
-    private Cache<String, Boolean> authorizationCache;
+    private Cache<String, HttpStatus> authorizationCache;
 
     @PostConstruct
     void init() {
@@ -40,39 +41,43 @@ public class KeycloakUmaClient {
                 .build();
     }
 
-    public Mono<Boolean> isAuthorized(String accessToken, String jti, String resourceName) {
-        log.debug("Checking authorization for JTI: {}, resource: {}", jti, resourceName);
-        String cacheKey = jti + ":" + resourceName;
-        Boolean cached = authorizationCache.getIfPresent(cacheKey);
+    public Mono<HttpStatus> isAuthorized(String accessToken, String jti, String permission) {
+        log.debug("Checking authorization for JTI: {}, permission: {}", jti, permission);
+        String cacheKey = jti + ":" + permission;
+        HttpStatus cached = authorizationCache.getIfPresent(cacheKey);
         if (cached != null) {
+            log.debug("Cache hit for JTI: {}, permission: {}, status: {}", jti, permission, cached);
             return Mono.just(cached);
         }
-        return callKeycloakUma(accessToken, resourceName)
-                .doOnNext(result -> {
-                    log.info("Authorization result for JTI: {}, resource: {}, result: {}", jti, resourceName, result);
-                    authorizationCache.put(cacheKey, result);
+        return callKeycloakUma(accessToken, permission)
+                .doOnNext(status -> {
+                    log.info("Authorization result for JTI: {}, permission: {}, status: {}", jti, permission, status);
+                    if (!status.is5xxServerError()) {
+                        authorizationCache.put(cacheKey, status);
+                    }
                 });
     }
 
-    private Mono<Boolean> callKeycloakUma(String accessToken, String resourceName) {
-        log.debug("Calling Keycloak UMA server for resource: {}", resourceName);
+    private Mono<HttpStatus> callKeycloakUma(String accessToken, String permission) {
         String tokenUrl = "/realms/" + properties.getRealm() + "/protocol/openid-connect/token";
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("grant_type", UMA_GRANT_TYPE);
         body.add("audience", properties.getAudience());
-        body.add("permission", resourceName);
-        log.info("Calling Keycloak UMA server with body: {}, token url: {}, access token: {}, resource name: {}", body, tokenUrl, accessToken, resourceName);
+        body.add("permission", permission);
+        log.debug("Calling Keycloak UMA endpoint: {}, permission: {}", tokenUrl, permission);
         return webClient.post()
                 .uri(tokenUrl)
                 .header("Authorization", "Bearer " + accessToken)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(BodyInserters.fromFormData(body))
-                .retrieve()
-                .toBodilessEntity()
-                .map(response -> {
-                    log.info("Keycloak UMA server response: {}", response);
-                    return response.getStatusCode().is2xxSuccessful();
+                .exchangeToMono(response -> {
+                    HttpStatus status = (HttpStatus) response.statusCode();
+                    log.info("Keycloak UMA response: {}", status);
+                    return response.releaseBody().thenReturn(status);
                 })
-                .onErrorReturn(false);
+                .onErrorResume(ex -> {
+                    log.error("Keycloak UMA unreachable: {}", ex.getMessage());
+                    return Mono.just(HttpStatus.SERVICE_UNAVAILABLE);
+                });
     }
 }
